@@ -1,10 +1,10 @@
 package com.example.weatherappcompose.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -12,20 +12,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.weatherappcompose.R
+import com.example.weatherappcompose.data.WeatherModel
 import com.google.accompanist.pager.ExperimentalPagerApi
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.pagerTabIndicatorOffset
 import com.google.accompanist.pager.rememberPagerState
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
-@Preview(showBackground = true)
 @Composable
-fun MainCard() {
+fun MainCard(currentDay: MutableState<WeatherModel>, onClickSync: () -> Unit, onClickSearch: () -> Unit) {
     Column(
         modifier = Modifier
             .padding(5.dp)
@@ -50,12 +51,12 @@ fun MainCard() {
                     ) {
                         Text(
                             modifier = Modifier.padding(top = 8.dp, start = 8.dp),
-                            text = "20 jun 2022 12:00",
+                            text = currentDay.value.time,
                             style = TextStyle(fontSize = 15.sp),
                             color = Color.Black
                         )
                         AsyncImage(
-                            model = "https://cdn.weatherapi.com/weather/64x64/day/113.png",
+                            model = "https:${currentDay.value.conditionIcon}",
                             contentDescription = "im2",
                             modifier = Modifier
                                 .size(35.dp)
@@ -64,17 +65,20 @@ fun MainCard() {
                     }
                 }
                 Text(
-                    text = "London",
+                    text = currentDay.value.city,
                     style = TextStyle(fontSize = 24.sp),
                     color = Color.Black
                 )
                 Text(
-                    text = "23C",
+                    text = if (currentDay.value.currentTemp.isNotEmpty())
+                        "${currentDay.value.currentTemp}°C"
+                    else
+                        "${currentDay.value.maxTemp}°C/${currentDay.value.minTemp}°C",
                     style = TextStyle(fontSize = 64.sp),
                     color = Color.Black
                 )
                 Text(
-                    text = "Sunny",
+                    text = currentDay.value.conditionText,
                     style = TextStyle(fontSize = 16.sp),
                     color = Color.Black
                 )
@@ -83,7 +87,7 @@ fun MainCard() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(onClick = {
-
+                        onClickSearch.invoke()
                     }) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_search),
@@ -92,13 +96,13 @@ fun MainCard() {
                     }
 
                     Text(
-                        text = "23C/12C",
+                        text = "${currentDay.value.maxTemp}°C/${currentDay.value.minTemp}°C",
                         style = TextStyle(fontSize = 16.sp),
                         color = Color.Black
                     )
 
                     IconButton(onClick = {
-
+                        onClickSync.invoke()
                     }) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_sync),
@@ -114,7 +118,7 @@ fun MainCard() {
 
 @OptIn(ExperimentalPagerApi::class)
 @Composable
-fun TabLayout() {
+fun TabLayout(daysList: MutableState<List<WeatherModel>>, currentDay: MutableState<WeatherModel>) {
     val tabList = listOf("HOURS", "DAYS")
     val pagerState = rememberPagerState()
     val tabIndex = pagerState.currentPage
@@ -147,12 +151,35 @@ fun TabLayout() {
             count = tabList.size,
             state = pagerState,
             modifier = Modifier.weight(1.0f)
-        ) {index ->
-            LazyColumn(modifier = Modifier.fillMaxSize()){
-                items(15){
-                    ListItem()
-                }
+        ) { index ->
+            val list = when (index) {
+                0 -> getWeatherByHours(currentDay.value.hoursWeather)
+                1 -> daysList.value
+                else -> daysList.value
             }
+            MainList(list = list, currentDay = currentDay)
         }
     }
+}
+
+private fun getWeatherByHours(hours: String): List<WeatherModel> {
+    if (hours.isEmpty()) return listOf()
+    val hoursArray = JSONArray(hours)
+    val list = ArrayList<WeatherModel>()
+    for (i in 0 until hoursArray.length()) {
+        val item = hoursArray[i] as JSONObject
+        list.add(
+            WeatherModel(
+                "",
+                item.getString("time"),
+                item.getString("temp_c") + "°C",
+                item.getJSONObject("condition").getString("text"),
+                item.getJSONObject("condition").getString("icon"),
+                "",
+                "",
+                ""
+            )
+        )
+    }
+    return list
 }
